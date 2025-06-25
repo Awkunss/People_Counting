@@ -1,0 +1,14 @@
+path: D:\User\WS\DATPAPA\DAT\DAT.v1i.yolov8
+train: train/images
+val: valid/images  
+test: test/images
+
+# Classes - Update these based on your actual dataset
+nc: 1  # number of classes
+names: ['your_class']  # class names - UPDATE THIS
+
+# Optional: Add these if you have them
+# roboflow:
+#   workspace: your-workspace
+#   project: your-project
+#   version: 1
