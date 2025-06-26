@@ -5,6 +5,9 @@ from collections import defaultdict
 import torch
 import math
 import time
+import json
+import argparse
+import os
 
 # Configuration
 CLASS_ID = 0  # ID for 'person' class
@@ -17,6 +20,78 @@ total_counts = {'IN': 0, 'OUT': 0, 'NET': 0}
 previous_positions = {}
 crossing_events = []
 track_history = defaultdict(list)
+
+# Line configuration presets
+LINE_PRESETS = {
+    'horizontal_center': lambda w, h: [(50, h//2), (w-50, h//2)],
+    'vertical_center': lambda w, h: [(w//2, 50), (w//2, h-50)],
+    'diagonal_tl_br': lambda w, h: [(w//4, h//4), (3*w//4, 3*h//4)],
+    'diagonal_tr_bl': lambda w, h: [(3*w//4, h//4), (w//4, 3*h//4)],
+    'entrance_door': lambda w, h: [(w//3, h//3), (2*w//3, h//3)],
+    'exit_door': lambda w, h: [(w//4, 3*h//4), (3*w//4, 3*h//4)]
+}
+
+def load_config_file(config_path="line_config.json"):
+    """Load line configuration from JSON file"""
+    try:
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            return config.get('counting_lines', {})
+        else:
+            # Create default config file
+            default_config = {
+                "counting_lines": {
+                    "main_entrance": [[200, 300], [600, 300]],
+                    "side_door": [[100, 500], [400, 500]],
+                    "hallway": [[320, 100], [320, 600]]
+                }
+            }
+            with open(config_path, 'w') as f:
+                json.dump(default_config, f, indent=4)
+            print(f"Created default config file: {config_path}")
+            return default_config['counting_lines']
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return {}
+
+def setup_line_from_config(frame, line_config):
+    """Setup counting line from various configuration options"""
+    global line_points, line_ready
+    
+    h, w = frame.shape[:2]
+    
+    if line_config is None:
+        return False
+    
+    # Case 1: Direct coordinates [(x1,y1), (x2,y2)]
+    if isinstance(line_config, list) and len(line_config) == 2:
+        if all(isinstance(p, (list, tuple)) and len(p) == 2 for p in line_config):
+            line_points = [tuple(line_config[0]), tuple(line_config[1])]
+            line_ready[0] = True
+            calculate_line_properties()
+            print(f"Line set from coordinates: {line_points}")
+            return True
+    
+    # Case 2: Preset name
+    if isinstance(line_config, str) and line_config in LINE_PRESETS:
+        line_points = LINE_PRESETS[line_config](w, h)
+        line_ready[0] = True
+        calculate_line_properties()
+        print(f"Line set from preset '{line_config}': {line_points}")
+        return True
+    
+    # Case 3: From config file
+    if isinstance(line_config, str):
+        config_lines = load_config_file()
+        if line_config in config_lines:
+            line_points = [tuple(config_lines[line_config][0]), tuple(config_lines[line_config][1])]
+            line_ready[0] = True
+            calculate_line_properties()
+            print(f"Line set from config file '{line_config}': {line_points}")
+            return True
+    
+    return False
 
 def draw_line(event, x, y, flags, param):
     """Mouse callback function to draw counting line"""
@@ -211,10 +286,37 @@ def reset_counting_system():
     track_history.clear()
     print("System reset!")
 
+def show_available_configs():
+    """Show all available line configurations"""
+    print("\n" + "="*50)
+    print("AVAILABLE LINE CONFIGURATIONS")
+    print("="*50)
+    
+    print("\n1. PRESET LINES:")
+    for preset in LINE_PRESETS.keys():
+        print(f"   - {preset}")
+    
+    print("\n2. CONFIG FILE LINES:")
+    config_lines = load_config_file()
+    for name in config_lines.keys():
+        print(f"   - {name}: {config_lines[name]}")
+    
+    print("\n3. MANUAL COORDINATES:")
+    print("   - Format: [[x1,y1], [x2,y2]]")
+    print("   - Example: [[100,200], [400,200]]")
+    
+    print("\n4. COMMAND LINE ARGS:")
+    print("   - --line x1 y1 x2 y2")
+    print("   - --preset preset_name") 
+    print("   - --config config_name")
+    print("="*50)
+
 def line_people_counter(
     video_path='C:/Users/ACER/Downloads/DAT/Test.mp4',
     model_path='yolov8s.pt',
-    camera_id=None
+    camera_id=None,
+    line_config=None,
+    show_config_help=False
 ):
     """
     Main function for line crossing people counter
@@ -223,8 +325,14 @@ def line_people_counter(
         video_path: Path to video file (if camera_id is None)
         model_path: Path to YOLO model
         camera_id: Camera ID for live feed (0, 1, etc.) - overrides video_path
+        line_config: Line configuration (coordinates, preset name, or config name)
+        show_config_help: Show available configurations and exit
     """
     global line_points, line_ready, total_counts, previous_positions
+    
+    if show_config_help:
+        show_available_configs()
+        return
     
     print("=" * 60)
     print("FUNCTIONAL LINE CROSSING PEOPLE COUNTER")
@@ -257,17 +365,35 @@ def line_people_counter(
         print(f"Error: Could not open {source_name}")
         return
     
+    # Get first frame to setup line
+    success, first_frame = cap.read()
+    if not success:
+        print("Error: Could not read first frame")
+        return
+    
+    # Setup counting line from config
+    line_configured = False
+    if line_config:
+        line_configured = setup_line_from_config(first_frame, line_config)
+    
     # Set up window and mouse callback
     window_name = 'Line Crossing People Counter'
     cv2.namedWindow(window_name)
     cv2.setMouseCallback(window_name, draw_line)
     
     print("\nInstructions:")
-    print("1. Click 2 points to draw counting line")
+    if line_configured:
+        print("✓ Counting line configured automatically")
+    else:
+        print("1. Click 2 points to draw counting line")
     print("2. Press 'r' to reset line and counts")
     print("3. Press 'q' to quit")
     print("4. Press 's' to save current frame")
+    print("5. Press 'h' to show config help")
     print("=" * 60)
+    
+    # Reset video to beginning
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     
     frame_count = 0
     start_time = time.time()
@@ -350,7 +476,7 @@ def line_people_counter(
             cv2.putText(frame, "Click 2 points to draw counting line", (10, frame.shape[0] - 60),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
         
-        cv2.putText(frame, "Press 'r' to reset, 'q' to quit, 's' to save", (10, frame.shape[0] - 30),
+        cv2.putText(frame, "Press 'r' to reset, 'q' to quit, 's' to save, 'h' for help", (10, frame.shape[0] - 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         
         # Add frame info
@@ -374,6 +500,8 @@ def line_people_counter(
             filename = f"line_counter_snapshot_{timestamp}.jpg"
             cv2.imwrite(filename, original_frame)
             print(f"Frame saved as: {filename}")
+        elif key == ord('h'):
+            show_available_configs()
     
     # Cleanup
     cap.release()
@@ -394,20 +522,37 @@ def line_people_counter(
     print("=" * 60)
 
 if __name__ == "__main__":
-    # Configuration
-    MODE = "video"  # Change to "camera" for live camera feed
+    parser = argparse.ArgumentParser(description="Line Crossing People Counter")
+    parser.add_argument('--video', type=str, default='C:/Users/ACER/Downloads/DAT/Test.mp4',
+                       help='Path to video file')
+    parser.add_argument('--camera', type=int, help='Camera ID (overrides video)')
+    parser.add_argument('--model', type=str, default='yolov8s.pt',
+                       help='Path to YOLO model')
+    parser.add_argument('--line', nargs=4, type=int, metavar=('x1', 'y1', 'x2', 'y2'),
+                       help='Line coordinates: x1 y1 x2 y2')
+    parser.add_argument('--preset', type=str, choices=list(LINE_PRESETS.keys()),
+                       help='Use predefined line preset')
+    parser.add_argument('--config', type=str,
+                       help='Use line from config file')
+    parser.add_argument('--show-configs', action='store_true',
+                       help='Show available configurations and exit')
     
-    if MODE == "camera":
-        # Camera mode
-        CAMERA_ID = 0  # 0 = default camera, 1 = second camera, etc.
-        line_people_counter(
-            camera_id=CAMERA_ID,
-            model_path='yolov8s.pt'
-        )
-    else:
-        # Video mode
-        VIDEO_PATH = 'C:/Users/ACER/Downloads/DAT/Test.mp4'  # Update this path
-        line_people_counter(
-            video_path=VIDEO_PATH,
-            model_path='yolov8s.pt'
-        )
+    args = parser.parse_args()
+    
+    # Determine line configuration
+    line_config = None
+    if args.line:
+        line_config = [(args.line[0], args.line[1]), (args.line[2], args.line[3])]
+    elif args.preset:
+        line_config = args.preset
+    elif args.config:
+        line_config = args.config
+    
+    # Run the counter
+    line_people_counter(
+        video_path=args.video,
+        model_path=args.model,
+        camera_id=args.camera,
+        line_config=line_config,
+        show_config_help=args.show_configs
+    )
