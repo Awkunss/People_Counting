@@ -1,0 +1,46 @@
+# People Counting Project - Simple .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+
+# Virtual Environment
+venv/
+env/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Machine Learning Models (uncomment if you want to ignore YOLO models)
+*.pt
+*.onnx
+
+# Large video files (uncomment if you want to ignore video files)
+# *.mp4
+# *.avi
+# *.mov
+
+# Output/Results
+output/
+results/
+logs/
