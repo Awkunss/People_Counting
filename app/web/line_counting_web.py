@@ -128,6 +128,7 @@ class DeepTracker:
             patches.append(patch)
         features = self.feature_extractor.extract_features(patches)
         cost_matrix = self._calculate_cost_matrix(detections, features)
+        
         if len(self.tracks) > 0 and cost_matrix.size > 0:
             row_indices, col_indices = linear_sum_assignment(cost_matrix)
             matched_tracks = set()
@@ -305,12 +306,13 @@ class LineCounterWeb:
                 # Gửi stats update
                 self.send_stats()
                 
-                # FPS logging
+                # FPS logging với thông tin TensorRT
                 if frame_count % 60 == 0:
                     current_time = time.time()
                     fps = 60 / (current_time - fps_time) if current_time > fps_time else 0
                     fps_time = current_time
-                    self.logger.info(f'FPS: {fps:.1f} | Tracks: {len(active_tracks)}')
+                    model_type = "🚀 TensorRT" if self.model_path.endswith('.engine') else "📦 PyTorch"
+                    self.logger.info(f'{model_type} FPS: {fps:.1f} | Tracks: {len(active_tracks)}')
                 
                 # Tối ưu tốc độ streaming - giảm delay
                 time.sleep(0.01)  # ~60 FPS target
@@ -472,6 +474,9 @@ class LineCounterWeb:
     def stop(self):
         """Dừng counting"""
         self.running = False
+        # Cleanup TensorRT resources
+        if hasattr(self.model, 'cleanup'):
+            self.model.cleanup()
         self.logger.info('Line Counting đã dừng')
     
     def reset(self):
@@ -485,6 +490,9 @@ class LineCounterWeb:
         """Dọn dẹp resources"""
         if self.cap:
             self.cap.release()
+        # Cleanup TensorRT resources
+        if hasattr(self.model, 'cleanup'):
+            self.model.cleanup()
         self.logger.info('Đã dọn dẹp resources')
     
     def set_line_points(self, points):

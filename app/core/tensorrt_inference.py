@@ -50,6 +50,17 @@ class TensorRTInference:
         self._load_engine()
         self._allocate_buffers()
         
+        # Store context for cleanup
+        self._cuda_context = None
+        try:
+            import pycuda.driver as cuda
+            try:
+                self._cuda_context = cuda.Context.get_current()
+            except:
+                pass
+        except:
+            pass
+        
         self.logger.info(f"✅ TensorRT engine loaded: {engine_path}")
     
     def _init_cuda_context(self):
@@ -384,6 +395,15 @@ class TensorRTInference:
                 self.xyxy = boxes
                 self.conf = scores
                 self.cls = class_ids
+                self._data = boxes  # Store for len() compatibility
+            
+            def __len__(self):
+                """Return number of detections"""
+                return len(self._data) if self._data is not None else 0
+            
+            def __iter__(self):
+                """Make iterable"""
+                return iter(self._data) if self._data is not None else iter([])
         
         class MockResults:
             def __init__(self, boxes):
@@ -391,6 +411,42 @@ class TensorRTInference:
         
         mock_boxes = MockBoxes(boxes, scores, class_ids)
         return MockResults(mock_boxes)
+    
+    def cleanup(self):
+        """Clean up CUDA resources"""
+        try:
+            if hasattr(self, 'stream') and self.stream:
+                self.stream.synchronize()
+            
+            # Clean up device memory
+            if hasattr(self, 'inputs'):
+                for inp in self.inputs:
+                    if hasattr(inp, 'device') and inp.device:
+                        inp.device.free()
+            
+            if hasattr(self, 'outputs'):
+                for out in self.outputs:
+                    if hasattr(out, 'device') and out.device:
+                        out.device.free()
+            
+            # Clean up context
+            if hasattr(self, 'context') and self.context:
+                del self.context
+            
+            if hasattr(self, 'engine') and self.engine:
+                del self.engine
+                
+            self.logger.info("✅ TensorRT resources cleaned up")
+            
+        except Exception as e:
+            self.logger.warning(f"⚠️ TensorRT cleanup warning: {e}")
+    
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except:
+            pass
 
 class HostDeviceMem:
     """Simple helper để store host và device memory pointers"""
@@ -427,6 +483,18 @@ class YOLOWithTensorRT:
             return self.model.predict(*args, **kwargs)
         else:
             return self.model(*args, **kwargs)
+    
+    def cleanup(self):
+        """Clean up resources"""
+        if self.is_tensorrt and hasattr(self.model, 'cleanup'):
+            self.model.cleanup()
+    
+    def __del__(self):
+        """Destructor to ensure cleanup"""
+        try:
+            self.cleanup()
+        except:
+            pass
 
 # Factory function
 def create_yolo_model(model_path, logger=None):

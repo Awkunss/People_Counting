@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Drawing Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #222;
+            color: white;
+        }
+        #testCanvas {
+            border: 2px solid #00ff00;
+            background: #000;
+            cursor: crosshair;
+            display: block;
+            margin: 20px auto;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .info {
+            text-align: center;
+            margin: 20px;
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Canvas Drawing Test</h1>
+    
+    <div class="info">
+        <p><strong>Mode:</strong> <span id="currentMode">Line</span></p>
+        <p><strong>Points:</strong> <span id="pointCount">0</span></p>
+        <p><strong>Instruction:</strong> <span id="instruction">Click 2 points for line</span></p>
+    </div>
+    
+    <div class="controls">
+        <button onclick="setMode('line')">📊 Line Mode</button>
+        <button onclick="setMode('zone')">🏢 Zone Mode</button>
+        <button onclick="clearDrawing()">🗑️ Clear</button>
+        <button onclick="testConnection()">🔗 Test Connection</button>
+    </div>
+    
+    <canvas id="testCanvas" width="800" height="600"></canvas>
+    
+    <div class="info">
+        <h3>Debug Info:</h3>
+        <div id="debugInfo"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        let canvas, ctx;
+        let points = [];
+        let currentMethod = 'line';
+        let socket;
+
+        // Initialize
+        function init() {
+            canvas = document.getElementById('testCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Setup canvas
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add event listeners
+            canvas.addEventListener('click', handleClick);
+            canvas.addEventListener('touchstart', handleTouch, {passive: false});
+            
+            // Connect to socket
+            try {
+                socket = io();
+                setupSocketEvents();
+                debug('Canvas initialized and socket connecting...');
+            } catch (e) {
+                debug('Socket.IO not available: ' + e.message);
+            }
+        }
+
+        function setupSocketEvents() {
+            socket.on('connect', function() {
+                debug('✅ Socket connected');
+            });
+
+            socket.on('disconnect', function() {
+                debug('❌ Socket disconnected');
+            });
+
+            socket.on('error', function(error) {
+                debug('❌ Socket error: ' + error);
+            });
+        }
+
+        function handleClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.round(event.clientX - rect.left);
+            const y = Math.round(event.clientY - rect.top);
+            
+            debug(`Click at: (${x}, ${y})`);
+            
+            points.push({x: x, y: y});
+            updateUI();
+            drawPoints();
+            
+            const maxPoints = currentMethod === 'line' ? 2 : 5;
+            if (points.length >= maxPoints) {
+                finishDrawing();
+            }
+        }
+
+        function handleTouch(event) {
+            event.preventDefault();
+            const touch = event.touches[0];
+            const mouseEvent = new MouseEvent('click', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            handleClick(mouseEvent);
+        }
+
+        function drawPoints() {
+            // Clear and redraw background
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (points.length === 0) return;
+            
+            // Draw points
+            ctx.fillStyle = '#00ff00';
+            points.forEach((point, index) => {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Draw number
+                ctx.fillStyle = '#ffff00';
+                ctx.font = '16px Arial';
+                ctx.fillText((index + 1).toString(), point.x + 12, point.y - 8);
+                ctx.fillStyle = '#00ff00';
+            });
+            
+            // Draw lines
+            if (points.length > 1) {
+                ctx.strokeStyle = currentMethod === 'line' ? '#ff0000' : '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                
+                for (let i = 1; i < points.length; i++) {
+                    ctx.lineTo(points[i].x, points[i].y);
+                }
+                
+                if (currentMethod === 'zone' && points.length >= 3) {
+                    ctx.closePath();
+                }
+                
+                ctx.stroke();
+            }
+        }
+
+        function setMode(mode) {
+            currentMethod = mode;
+            clearDrawing();
+            updateUI();
+            debug(`Mode changed to: ${mode}`);
+        }
+
+        function clearDrawing() {
+            points = [];
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            updateUI();
+            debug('Drawing cleared');
+        }
+
+        function finishDrawing() {
+            debug(`Drawing finished with ${points.length} points: ${JSON.stringify(points)}`);
+            
+            if (socket && socket.connected) {
+                const data = {
+                    method: currentMethod,
+                    points: points
+                };
+                socket.emit('set_drawing_points', data);
+                debug('Points sent to server: ' + JSON.stringify(data));
+            } else {
+                debug('Socket not connected, cannot send points');
+            }
+        }
+
+        function testConnection() {
+            if (socket) {
+                debug(`Socket status: ${socket.connected ? 'Connected' : 'Disconnected'}`);
+                if (socket.connected) {
+                    socket.emit('test_event', {message: 'Hello from drawing test'});
+                    debug('Test event sent');
+                }
+            } else {
+                debug('Socket not initialized');
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('currentMode').textContent = currentMethod;
+            document.getElementById('pointCount').textContent = points.length;
+            
+            const maxPoints = currentMethod === 'line' ? 2 : 5;
+            const remaining = maxPoints - points.length;
+            
+            if (remaining > 0) {
+                document.getElementById('instruction').textContent = 
+                    `Click ${remaining} more points for ${currentMethod}`;
+            } else {
+                document.getElementById('instruction').textContent = 'Drawing complete!';
+            }
+        }
+
+        function debug(message) {
+            const debugDiv = document.getElementById('debugInfo');
+            const time = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `<div>[${time}] ${message}</div>`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        // Start
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

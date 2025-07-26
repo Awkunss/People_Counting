@@ -334,6 +334,9 @@ class ZoneCounterWeb:
     def stop(self):
         """Dừng counting"""
         self.running = False
+        # Cleanup TensorRT resources
+        if hasattr(self.model, 'cleanup'):
+            self.model.cleanup()
         self.logger.info('Zone Counting đã dừng')
     
     def reset(self):
@@ -351,6 +354,9 @@ class ZoneCounterWeb:
         """Dọn dẹp resources"""
         if self.cap:
             self.cap.release()
+        # Cleanup TensorRT resources
+        if hasattr(self.model, 'cleanup'):
+            self.model.cleanup()
         self.logger.info('Đã dọn dẹp resources')
     
     def set_zone_points(self, points):
