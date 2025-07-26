@@ -1,46 +1,89 @@
-# People Counting Project - Simple .gitignore
-
 # Python
 __pycache__/
 *.py[cod]
-*.pyc
-*.pyo
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Virtual Environment
-venv/
-env/
-.venv/
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS Files
-.DS_Store
-Thumbs.db
-Desktop.ini
+# Project specific
+# Backup files
+*_old.*
+*_backup.*
+
+# Large video files (optional)
+# data/*.mp4
+# data/*.avi
+
+# Model files (optional - comment out if you want to track them)
+# models/*.pt
 
 # Logs
 *.log
+logs/
 
 # Temporary files
-*.tmp
-*.temp
-*~
+.DS_Store
+Thumbs.db
 
-# Machine Learning Models (uncomment if you want to ignore YOLO models)
-*.pt
-*.onnx
+# Flask
+instance/
+.webassets-cache
 
-# Large video files (uncomment if you want to ignore video files)
-# *.mp4
-# *.avi
-# *.mov
-
-# Output/Results
-output/
-results/
-logs/
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

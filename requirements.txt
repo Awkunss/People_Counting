@@ -1,0 +1,27 @@
+# People Counting System Requirements
+
+# Core ML/CV libraries
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# TensorRT và GPU acceleration (optional)
+nvidia-tensorrt>=8.6.0
+pycuda>=2022.1
+
+# Web framework
+flask>=2.3.0
+flask-socketio>=5.3.0
+python-socketio>=5.8.0
+
+# Utilities
+pillow>=10.0.0
+python-dotenv>=1.0.0
+
+# Development (optional)
+pytest>=7.4.0
+black>=23.0.0
+flake8>=6.0.0

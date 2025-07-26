@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 People Counting System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            height: calc(100vh - 200px);
+        }
+
+        .video-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        select, input, button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+
+        button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stop-btn {
+            background: linear-gradient(45deg, #f44336, #d32f2f) !important;
+        }
+
+        .reset-btn {
+            background: linear-gradient(45deg, #ff9800, #f57c00) !important;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            height: calc(100% - 80px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #videoFeed {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .no-video {
+            font-size: 1.2em;
+            color: #ccc;
+            text-align: center;
+        }
+
+        .stats-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stats-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .stats-header h2 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .in-count { color: #4CAF50; }
+        .out-count { color: #f44336; }
+        .net-count { color: #ff9800; }
+        .zone-count { color: #2196F3; }
+
+        .log-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .log-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #4CAF50;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-entry.error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .log-entry.warning {
+            border-left-color: #ff9800;
+            background: rgba(255, 152, 0, 0.1);
+        }
+
+        .log-entry.info {
+            border-left-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
+        }
+
+        .timestamp {
+            color: #ccc;
+            font-size: 0.8em;
+            margin-right: 10px;
+        }
+
+        .drawing-instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+        }
+
+        .instruction-box {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.9em;
+        }
+
+        .clear-btn {
+            padding: 5px 10px !important;
+            font-size: 0.8em !important;
+            background: linear-gradient(45deg, #f44336, #d32f2f) !important;
+            margin: 0 !important;
+        }
+
+        button[id="drawBtn"] {
+            background: linear-gradient(45deg, #9c27b0, #7b1fa2) !important;
+        }
+
+        #videoCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-stopped { background-color: #f44336; }
+        .status-running { background-color: #4CAF50; }
+        .status-connecting { background-color: #ff9800; }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .stats-panel {
+                order: -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .control-group {
+                justify-content: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            z-index: 1000;
+        }
+
+        .connected {
+            background: rgba(76, 175, 80, 0.9);
+        }
+
+        .disconnected {
+            background: rgba(244, 67, 54, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">
+        <span class="status-indicator status-connecting"></span>
+        Đang kết nối...
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Hệ Thống Đếm Người</h1>
+            <p>Real-time People Counting với AI Detection</p>
+        </div>
+
+        <div class="main-content">
+            <div class="video-section">
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Phương pháp:</label>
+                        <select id="methodSelect">
+                            <option value="line">📊 Line Counting</option>
+                            <option value="zone">🏢 Zone Counting</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>Video:</label>
+                        <input type="text" id="videoInput" placeholder="Test.mp4 hoặc 0" value="Test.mp4">
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>Model:</label>
+                        <select id="modelSelect">
+                            <optgroup label="PyTorch Models">
+                                <option value="yolov8n.pt">YOLOv8n (nhanh)</option>
+                                <option value="yolov8s.pt" selected>YOLOv8s (cân bằng)</option>
+                                <option value="yolov8m.pt">YOLOv8m (chính xác)</option>
+                                <option value="yolov8l.pt">YOLOv8l (rất chính xác)</option>
+                                <option value="yolov9s.pt">YOLOv9s</option>
+                            </optgroup>
+                            <optgroup label="TensorRT Engines (🚀 Tăng tốc)">
+                                <option value="yolov8n_fp16.engine">YOLOv8n TensorRT FP16</option>
+                                <option value="yolov8s_fp16.engine">YOLOv8s TensorRT FP16</option>
+                                <option value="yolov8m_fp16.engine">YOLOv8m TensorRT FP16</option>
+                                <option value="yolov8l_fp16.engine">YOLOv8l TensorRT FP16</option>
+                                <option value="yolov9s_fp16.engine">YOLOv9s TensorRT FP16</option>
+                                <option value="yolov8n_int8.engine">YOLOv8n TensorRT INT8</option>
+                                <option value="yolov8s_int8.engine">YOLOv8s TensorRT INT8</option>
+                                <option value="yolov8m_int8.engine">YOLOv8m TensorRT INT8</option>
+                                <option value="yolov8l_int8.engine">YOLOv8l TensorRT INT8</option>
+                                <option value="yolov9s_int8.engine">YOLOv9s TensorRT INT8</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group" id="quantizeControls" style="border-top: 1px solid #444; padding-top: 10px; margin-top: 10px;">
+                        <label>🚀 TensorRT Quantization:</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="precisionSelect" style="flex: 1;">
+                                <option value="fp16">FP16 (khuyến nghị)</option>
+                                <option value="int8">INT8 (nhỏ nhất)</option>
+                            </select>
+                            <button id="quantizeBtn" onclick="quantizeCurrentModel()" style="background: linear-gradient(45deg, #FF6B35, #F7931E); border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                                ⚡ Tạo Engine
+                            </button>
+                        </div>
+                        <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                            Tạo TensorRT engine từ PyTorch model để tăng tốc inference
+                        </div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button id="startBtn" onclick="startCounting()">🚀 Bắt đầu</button>
+                    <button id="stopBtn" class="stop-btn" onclick="stopCounting()" disabled>⏹️ Dừng</button>
+                    <button id="resetBtn" class="reset-btn" onclick="resetSystem()">🔄 Reset</button>
+                    <button id="drawBtn" onclick="toggleDrawingMode()" disabled>🎨 Vẽ lại</button>
+                    <button id="testDrawBtn" onclick="testDrawingMode()" style="background: linear-gradient(45deg, #2196F3, #1976D2) !important;">🧪 Vẽ</button>
+                </div>
+
+                <div class="video-container">
+                    <canvas id="videoCanvas" style="display: none; cursor: crosshair;"></canvas>
+                    <img id="videoFeed" style="display: none;" />
+                    <div class="no-video" id="noVideo">
+                        📹 Chọn cấu hình và nhấn "Bắt đầu" để xem video
+                    </div>
+                    <div class="drawing-instructions" id="drawingInstructions" style="display: none;">
+                        <div class="instruction-box">
+                            <span id="instructionText">📍 Click 2 điểm để vẽ đường đếm</span>
+                            <button onclick="clearDrawing()" class="clear-btn">🗑️ Xóa</button>
+                            <button id="finishBtn" onclick="finishDrawing()" class="clear-btn" style="display: none; background: linear-gradient(45deg, #4CAF50, #45a049) !important;">✅ Hoàn thành</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-panel">
+                <div class="stats-header">
+                    <h2>📊 Thống Kê</h2>
+                    <div>
+                        <span class="status-indicator" id="systemStatus"></span>
+                        <span id="systemStatusText">Đã dừng</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value in-count" id="inCount">0</div>
+                        <div class="stat-label">Vào ↗️</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value out-count" id="outCount">0</div>
+                        <div class="stat-label">Ra ↙️</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value net-count" id="netCount">0</div>
+                        <div class="stat-label">Ròng 📊</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value zone-count" id="zoneCount">0</div>
+                        <div class="stat-label">Trong vùng 🏢</div>
+                    </div>
+                </div>
+
+                <div class="log-section">
+                    <div class="log-header">
+                        <h3>📝 Log Hệ Thống</h3>
+                        <button onclick="clearLogs()" style="padding: 5px 10px; font-size: 0.8em;">🗑️ Xóa</button>
+                    </div>
+                    <div class="log-container" id="logContainer">
+                        <div class="log-entry info">
+                            <span class="timestamp">[System]</span>
+                            🚀 Hệ thống đã sẵn sàng
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let isRunning = false;
+        let currentMethod = 'line';
+        let drawingMode = false;
+        let canvas, ctx;
+        let points = [];
+        let isDrawingEnabled = false;
+        let isTestMode = false;
+        
+        // Frame metadata để tính toán tọa độ chính xác
+        let frameMetadata = {
+            original_size: { width: 800, height: 600 },
+            display_size: { width: 800, height: 600 },
+            scale_factor: 1.0
+        };
+
+        // Canvas và drawing variables
+        let canvasRect = null;
+
+        // Kết nối Socket.IO
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            updateConnectionStatus(true);
+            addLog('info', '✅ Đã kết nối với server');
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from server');
+            updateConnectionStatus(false);
+            addLog('error', '❌ Mất kết nối với server');
+        });
+
+        // Nhận frame video
+        socket.on('video_frame', function(data) {
+            const videoFeed = document.getElementById('videoFeed');
+            const videoCanvas = document.getElementById('videoCanvas');
+            const noVideo = document.getElementById('noVideo');
+            
+            // Lưu metadata frame để tính toán tọa độ
+            if (data.original_size && data.display_size) {
+                frameMetadata = {
+                    original_size: data.original_size,
+                    display_size: data.display_size,
+                    scale_factor: data.scale_factor || 1.0
+                };
+                console.log('📊 Frame metadata updated:', frameMetadata);
+            } else if (data.frame_metadata) {
+                frameMetadata = {
+                    original_size: {
+                        width: data.frame_metadata.original_width,
+                        height: data.frame_metadata.original_height
+                    },
+                    display_size: {
+                        width: data.frame_metadata.original_width,
+                        height: data.frame_metadata.original_height
+                    },
+                    scale_factor: 1.0
+                };
+                console.log('📊 Frame metadata updated from frame_metadata:', frameMetadata);
+            }
+            
+            // Hiển thị canvas thay vì img khi đang drawing
+            if (isDrawingEnabled) {
+                console.log('🎥 Updating canvas with new frame, drawing enabled');
+                
+                const img = new Image();
+                img.onload = function() {
+                    // Lưu lại các points hiện tại trước khi update canvas
+                    const currentPoints = [...points];
+                    
+                    // Setup canvas với display size 
+                    const displayWidth = frameMetadata.display_size.width;
+                    const displayHeight = frameMetadata.display_size.height;
+                    
+                    const needResize = (videoCanvas.width !== displayWidth || videoCanvas.height !== displayHeight);
+                    
+                    if (needResize) {
+                        console.log('📐 Setting canvas to display size:', displayWidth, 'x', displayHeight);
+                        console.log('📊 Original frame size:', frameMetadata.original_size.width, 'x', frameMetadata.original_size.height);
+                        
+                        // Update canvas size to match display size
+                        videoCanvas.width = displayWidth;
+                        videoCanvas.height = displayHeight;
+                    }
+                    
+                    // Clear và vẽ frame mới
+                    ctx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+                    ctx.drawImage(this, 0, 0);
+                    
+                    // Vẽ lại các điểm
+                    drawPoints();
+                    
+                    // Update canvas rect cho mouse events (quan trọng!)
+                    setTimeout(() => {
+                        canvasRect = videoCanvas.getBoundingClientRect();
+                        console.log('📏 Canvas rect updated:', {
+                            left: canvasRect.left,
+                            top: canvasRect.top,
+                            width: canvasRect.width,
+                            height: canvasRect.height,
+                            canvasWidth: videoCanvas.width,
+                            canvasHeight: videoCanvas.height,
+                            frameMetadata: frameMetadata
+                        });
+                    }, 50);
+                };
+                img.src = 'data:image/jpeg;base64,' + (data.image || data.frame);
+                
+                videoCanvas.style.display = 'block';
+                videoFeed.style.display = 'none';
+            } else {
+                videoFeed.src = 'data:image/jpeg;base64,' + (data.image || data.frame);
+                videoFeed.style.display = 'block';
+                videoCanvas.style.display = 'none';
+            }
+            
+            noVideo.style.display = 'none';
+            
+            // Cập nhật stats từ data (tương thích với cả line và zone counting)
+            if (data.stats) {
+                console.log('📊 Video frame stats:', data.stats); // Debug log
+                // Zone counting stats - kiểm tra cả format cũ và mới
+                const inCount = data.stats.entering || data.stats.in_count || 0;
+                const outCount = data.stats.leaving || data.stats.out_count || 0;
+                const zoneCount = data.stats.current_count || data.stats.zone_count || 0;
+                
+                document.getElementById('inCount').textContent = inCount;
+                document.getElementById('outCount').textContent = outCount;
+                document.getElementById('netCount').textContent = inCount - outCount;
+                document.getElementById('zoneCount').textContent = zoneCount;
+                
+                // Cập nhật FPS
+                if (data.stats.fps) {
+                    document.getElementById('fps').textContent = data.stats.fps.toFixed(1);
+                }
+            } else if (data.in_count !== undefined || data.out_count !== undefined) {
+                console.log('📊 Direct stats:', {in: data.in_count, out: data.out_count, zone: data.zone_count}); // Debug log
+                // Line counting stats hoặc direct stats
+                document.getElementById('inCount').textContent = data.in_count || 0;
+                document.getElementById('outCount').textContent = data.out_count || 0;
+                document.getElementById('netCount').textContent = (data.in_count || 0) - (data.out_count || 0);
+                document.getElementById('zoneCount').textContent = data.zone_count || 0;
+            }
+        });
+
+        // Canvas drawing functions
+        function initCanvas() {
+            console.log('🎨 Initializing canvas...');
+            
+            canvas = document.getElementById('videoCanvas');
+            
+            if (!canvas) {
+                console.error('❌ Canvas element not found!');
+                return false;
+            }
+            
+            ctx = canvas.getContext('2d');
+            
+            if (!ctx) {
+                console.error('❌ Canvas context not available!');
+                return false;
+            }
+            
+            console.log('✅ Canvas initialized:', {
+                element: !!canvas,
+                context: !!ctx,
+                width: canvas.width,
+                height: canvas.height,
+                clientWidth: canvas.clientWidth,
+                clientHeight: canvas.clientHeight
+            });
+            
+            // Remove existing event listeners to avoid duplicates
+            canvas.removeEventListener('click', handleCanvasClick);
+            canvas.removeEventListener('touchstart', handleTouchStart);
+            canvas.removeEventListener('touchend', handleTouchEnd);
+            
+            // Add fresh event listeners
+            canvas.addEventListener('click', handleCanvasClick);
+            canvas.addEventListener('touchstart', handleTouchStart, {passive: false});
+            canvas.addEventListener('touchend', handleTouchEnd, {passive: false});
+            
+            // Test event listener
+            canvas.addEventListener('mousedown', function(e) {
+                console.log('🖱️ Mouse down detected on canvas');
+            });
+            
+            console.log('✅ Canvas event listeners added');
+            return true;
+        }
+
+        function handleTouchStart(event) {
+            event.preventDefault();
+            if (!isDrawingEnabled) return;
+            
+            const touch = event.touches[0];
+            const mouseEvent = new MouseEvent('click', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            
+            handleCanvasClick(mouseEvent);
+        }
+
+        function handleTouchEnd(event) {
+            event.preventDefault();
+        }
+
+        function handleCanvasClick(event) {
+            console.log('🎯 Canvas click event triggered');
+            
+            if (!isDrawingEnabled) {
+                console.log('❌ Drawing not enabled, ignoring click');
+                return;
+            }
+            
+            if (!canvas || !ctx) {
+                console.error('❌ Canvas or context not available!');
+                addLog('error', '❌ Canvas không sẵn sàng');
+                return;
+            }
+            
+            // Lấy canvas rect fresh mỗi lần click
+            const rect = canvas.getBoundingClientRect();
+            
+            if (rect.width === 0 || rect.height === 0) {
+                console.error('❌ Canvas has zero size!');
+                addLog('error', '❌ Canvas có kích thước 0');
+                return;
+            }
+            
+            // Tính tọa độ trong canvas display space
+            const rawX = event.clientX - rect.left;
+            const rawY = event.clientY - rect.top;
+            
+            // Scale từ browser display size về canvas internal size
+            const canvasScaleX = canvas.width / rect.width;
+            const canvasScaleY = canvas.height / rect.height;
+            
+            const canvasX = Math.round(rawX * canvasScaleX);
+            const canvasY = Math.round(rawY * canvasScaleY);
+            
+            // Scale từ canvas size về original frame size  
+            let originalX, originalY;
+            if (frameMetadata && frameMetadata.original_size && frameMetadata.display_size) {
+                const originalScaleX = frameMetadata.original_size.width / frameMetadata.display_size.width;
+                const originalScaleY = frameMetadata.original_size.height / frameMetadata.display_size.height;
+                originalX = Math.round(canvasX * originalScaleX);
+                originalY = Math.round(canvasY * originalScaleY);
+            } else {
+                // Fallback cho zone counting  
+                originalX = Math.round(canvasX);
+                originalY = Math.round(canvasY);
+            }
+            
+            console.log('📍 Coordinate transformation:', {
+                event: {
+                    clientX: event.clientX,
+                    clientY: event.clientY
+                },
+                browserRect: {
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height
+                },
+                canvas: {
+                    width: canvas.width,
+                    height: canvas.height
+                },
+                frameMetadata: frameMetadata,
+                transformation: {
+                    raw: { x: rawX, y: rawY },
+                    canvasScale: { x: canvasScaleX, y: canvasScaleY },
+                    canvasCoords: { x: canvasX, y: canvasY },
+                    originalCoords: { x: originalX, y: originalY }
+                }
+            });
+            
+            // Validate coordinates trong canvas space (để vẽ)
+            if (canvasX < 0 || canvasY < 0 || canvasX > canvas.width || canvasY > canvas.height) {
+                console.warn('⚠️ Canvas coordinates outside bounds:', {canvasX, canvasY, maxX: canvas.width, maxY: canvas.height});
+                addLog('warning', `⚠️ Click ngoài canvas: (${canvasX}, ${canvasY})`);
+                return;
+            }
+            
+            // Validate coordinates trong original frame space
+            if (frameMetadata && frameMetadata.original_size && (originalX < 0 || originalY < 0 || originalX > frameMetadata.original_size.width || originalY > frameMetadata.original_size.height)) {
+                console.warn('⚠️ Original coordinates outside bounds:', {originalX, originalY, maxX: frameMetadata.original_size.width, maxY: frameMetadata.original_size.height});
+            }
+            
+            // Lưu cả 2 bộ tọa độ: canvas để vẽ, original để gửi server
+            const newPoint = {
+                // Canvas coordinates để vẽ trên UI
+                x: canvasX,
+                y: canvasY,
+                // Original coordinates để gửi cho backend processing
+                originalX: originalX,
+                originalY: originalY
+            };
+            
+            points.push(newPoint);
+            
+            const maxPoints = currentMethod === 'line' ? 2 : 8;
+            
+            console.log(`✅ Added point ${points.length}/${maxPoints}:`, newPoint);
+            addLog('info', `📍 Điểm ${points.length}: Canvas(${canvasX}, ${canvasY}) → Original(${originalX}, ${originalY})`);
+            
+            // Vẽ ngay lập tức
+            drawPoints();
+            updateInstructionText();
+            
+            // Auto finish cho line khi có đủ 2 điểm
+            if (currentMethod === 'line' && points.length >= 2) {
+                console.log('🎉 Line drawing completed, finishing...');
+                setTimeout(() => {
+                    finishDrawing();
+                }, 100);
+            }
+            // Auto finish cho zone khi có đủ 8 điểm, hoặc cho phép finish manual khi có ít nhất 3 điểm
+            else if (currentMethod === 'zone' && points.length >= 8) {
+                console.log('🎉 Zone drawing completed, finishing...');
+                setTimeout(() => {
+                    finishDrawing();
+                }, 100);
+            }
+            else if (currentMethod === 'zone' && points.length >= 3) {
+                // Hiển thị nút finish cho zone khi có ít nhất 3 điểm
+                showFinishButton();
+            }
+        }
+
+        function drawPoints() {
+            if (!ctx || points.length === 0) {
+                console.log('🎨 No context or points to draw');
+                return;
+            }
+            
+            console.log('🎨 Drawing points:', points);
+            
+            // Save current context state
+            ctx.save();
+            
+            // Set drawing styles
+            ctx.strokeStyle = '#00ff00';
+            ctx.fillStyle = '#00ff00';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = 'rgba(0, 255, 0, 0.5)';
+            ctx.shadowBlur = 5;
+            
+            // Vẽ các điểm
+            points.forEach((point, index) => {
+                console.log(`Drawing point ${index + 1}:`, point);
+                
+                // Vẽ điểm tròn
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Vẽ border cho điểm
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // Hiển thị số thứ tự
+                ctx.fillStyle = '#ffff00';
+                ctx.font = 'bold 16px Arial';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 3;
+                ctx.strokeText((index + 1).toString(), point.x + 12, point.y - 8);
+                ctx.fillText((index + 1).toString(), point.x + 12, point.y - 8);
+                
+                // Reset styles for next iteration
+                ctx.fillStyle = '#00ff00';
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+            });
+            
+            // Vẽ đường nối
+            if (points.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                
+                if (currentMethod === 'line') {
+                    // Vẽ đường thẳng
+                    ctx.lineTo(points[1].x, points[1].y);
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = 'rgba(255, 0, 0, 0.5)';
+                } else {
+                    // Vẽ polygon
+                    for (let i = 1; i < points.length; i++) {
+                        ctx.lineTo(points[i].x, points[i].y);
+                    }
+                    if (points.length >= 3) {
+                        ctx.closePath();
+                    }
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = 'rgba(0, 255, 0, 0.5)';
+                }
+                
+                ctx.stroke();
+            }
+            
+            // Restore context state
+            ctx.restore();
+            
+            console.log('🎨 Points drawn successfully');
+        }
+
+        function clearDrawing() {
+            console.log('🗑️ Clearing drawing');
+            
+            points = [];
+            hideFinishButton(); // Ẩn nút finish khi xóa
+            if (ctx && canvas.width > 0) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                console.log('Canvas cleared');
+                
+                // Nếu đang trong video mode, vẽ lại frame hiện tại
+                if (isDrawingEnabled && !isTestMode) {
+                    const videoFeed = document.getElementById('videoFeed');
+                    if (videoFeed.src) {
+                        const img = new Image();
+                        img.onload = function() {
+                            ctx.drawImage(this, 0, 0);
+                        };
+                        img.src = videoFeed.src;
+                    }
+                }
+            }
+            updateInstructionText();
+            
+            // Gửi clear command tới server
+            socket.emit('clear_drawing');
+            
+            addLog('info', '🗑️ Đã xóa drawing');
+        }
+
+        function debugCoordinates(event) {
+            if (!canvas) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const rawX = event.clientX - rect.left;
+            const rawY = event.clientY - rect.top;
+            const scaledX = Math.round(rawX * scaleX);
+            const scaledY = Math.round(rawY * scaleY);
+            
+            console.log('🧪 Debug coordinates:', {
+                mouse: { x: event.clientX, y: event.clientY },
+                rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+                canvas: { width: canvas.width, height: canvas.height },
+                scale: { x: scaleX, y: scaleY },
+                relative: { x: rawX, y: rawY },
+                final: { x: scaledX, y: scaledY }
+            });
+            
+            return { x: scaledX, y: scaledY };
+        }
+
+        function finishDrawing() {
+            console.log('🎉 Finishing drawing with points:', points);
+            
+            isDrawingEnabled = false;
+            hideFinishButton(); // Ẩn nút finish
+            document.getElementById('drawingInstructions').style.display = 'none';
+            
+            // Chuẩn bị points để gửi server - sử dụng original coordinates
+            const serverPoints = points.map(point => ({
+                x: point.originalX || point.x,  // Fallback nếu không có originalX
+                y: point.originalY || point.y   // Fallback nếu không có originalY
+            }));
+            
+            console.log('📤 Sending points to server:', {
+                method: currentMethod,
+                points: serverPoints,
+                frameMetadata: frameMetadata
+            });
+            
+            socket.emit('set_drawing_points', {
+                method: currentMethod,
+                points: serverPoints
+            });
+            
+            addLog('info', `✅ Đã thiết lập ${currentMethod === 'line' ? 'đường đếm' : 'vùng đếm'} với ${serverPoints.length} điểm`);
+            addLog('info', `📊 Frame: ${frameMetadata.original_size.width}x${frameMetadata.original_size.height} → Display: ${frameMetadata.display_size.width}x${frameMetadata.display_size.height}`);
+        }
+
+        function updateInstructionText() {
+            const instructionText = document.getElementById('instructionText');
+            const maxPoints = currentMethod === 'line' ? 2 : 8;
+            const remaining = maxPoints - points.length;
+            
+            if (remaining > 0) {
+                if (currentMethod === 'line') {
+                    instructionText.textContent = `📍 Click ${remaining} điểm để vẽ đường đếm`;
+                } else {
+                    if (points.length < 3) {
+                        instructionText.textContent = `📍 Click ${3 - points.length} điểm để vẽ vùng đếm (tối thiểu)`;
+                    } else {
+                        instructionText.textContent = `📍 Click thêm ${remaining} điểm hoặc nhấn "Hoàn thành" (${points.length} điểm)`;
+                    }
+                }
+            } else {
+                instructionText.textContent = '✅ Hoàn thành!';
+            }
+        }
+
+        function showFinishButton() {
+            const finishBtn = document.getElementById('finishBtn');
+            if (finishBtn) {
+                finishBtn.style.display = 'inline-block';
+                console.log('✅ Finish button shown');
+            }
+        }
+
+        function hideFinishButton() {
+            const finishBtn = document.getElementById('finishBtn');
+            if (finishBtn) {
+                finishBtn.style.display = 'none';
+            }
+        }
+
+        // Nhận cập nhật thống kê
+        socket.on('stats_update', function(data) {
+            console.log('📊 Received stats_update:', data); // Debug log
+            document.getElementById('inCount').textContent = data.in_count || 0;
+            document.getElementById('outCount').textContent = data.out_count || 0;
+            document.getElementById('netCount').textContent = (data.in_count || 0) - (data.out_count || 0);
+            document.getElementById('zoneCount').textContent = data.zone_count || 0;
+        });
+
+        // Nhận log messages
+        socket.on('log_message', function(data) {
+            addLog(data.level, data.message);
+        });
+
+        // Nhận trạng thái hệ thống
+        socket.on('system_status', function(data) {
+            updateSystemStatus(data.status, data.message);
+        });
+
+        // Debug socket events
+        socket.on('connect_error', function(error) {
+            console.error('Socket connection error:', error);
+            addLog('error', '❌ Lỗi kết nối Socket.IO');
+        });
+
+        socket.on('error', function(error) {
+            console.error('Socket error:', error);
+            addLog('error', '❌ Lỗi Socket.IO: ' + error);
+        });
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            const indicator = status.querySelector('.status-indicator');
+            
+            if (connected) {
+                status.className = 'connection-status connected';
+                status.innerHTML = '<span class="status-indicator status-running"></span>Đã kết nối';
+            } else {
+                status.className = 'connection-status disconnected';
+                status.innerHTML = '<span class="status-indicator status-stopped"></span>Mất kết nối';
+            }
+        }
+
+        function updateSystemStatus(status, message) {
+            const indicator = document.getElementById('systemStatus');
+            const text = document.getElementById('systemStatusText');
+            
+            indicator.className = 'status-indicator status-' + status;
+            text.textContent = message;
+            
+            isRunning = (status === 'running');
+            updateButtons();
+            
+            // Chỉ enable drawing mode cho zone counting tự động
+            // Line counting cần người dùng bấm nút Draw manually
+            if (isRunning && currentMethod === 'zone') {
+                enableDrawingMode();
+            } else if (!isRunning) {
+                disableDrawingMode();
+            }
+        }
+
+        function updateButtons() {
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const drawBtn = document.getElementById('drawBtn');
+            
+            startBtn.disabled = isRunning;
+            stopBtn.disabled = !isRunning;
+            drawBtn.disabled = !isRunning;
+        }
+
+        function toggleDrawingMode() {
+            if (isDrawingEnabled) {
+                disableDrawingMode();
+                addLog('info', '🎨 Đã tắt chế độ vẽ');
+            } else {
+                enableDrawingMode();
+            }
+        }
+
+        function enableDrawingMode() {
+            currentMethod = document.getElementById('methodSelect').value;
+            isDrawingEnabled = true;
+            points = [];
+            hideFinishButton(); // Ẩn nút finish khi bắt đầu vẽ mới
+            
+            console.log('Enabling drawing mode for method:', currentMethod);
+            
+            document.getElementById('drawingInstructions').style.display = 'block';
+            updateInstructionText();
+            
+            // Đảm bảo canvas được hiển thị và có thể tương tác
+            const videoCanvas = document.getElementById('videoCanvas');
+            const videoFeed = document.getElementById('videoFeed');
+            
+            if (videoFeed.style.display !== 'none' && videoFeed.src) {
+                // Nếu có video đang hiển thị, chuyển sang canvas mode
+                videoCanvas.style.display = 'block';
+                videoFeed.style.display = 'none';
+                
+                // Copy current frame to canvas
+                const img = new Image();
+                img.onload = function() {
+                    videoCanvas.width = this.width;
+                    videoCanvas.height = this.height;
+                    ctx.drawImage(this, 0, 0);
+                    console.log('Canvas updated with current frame');
+                };
+                img.src = videoFeed.src;
+            }
+            
+            addLog('info', `🎨 Chế độ vẽ ${currentMethod === 'line' ? 'đường' : 'vùng'} đã bật`);
+        }
+
+        function disableDrawingMode() {
+            isDrawingEnabled = false;
+            document.getElementById('drawingInstructions').style.display = 'none';
+            
+            // Chuyển về hiển thị video feed bình thường
+            document.getElementById('videoCanvas').style.display = 'none';
+            document.getElementById('videoFeed').style.display = 'none';
+            document.getElementById('noVideo').style.display = 'block';
+        }
+
+        function addLog(level, message) {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${level}`;
+            logEntry.innerHTML = `<span class="timestamp">[${timestamp}]</span>${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Giới hạn số lượng log entries
+            const entries = logContainer.querySelectorAll('.log-entry');
+            if (entries.length > 100) {
+                entries[0].remove();
+            }
+        }
+
+        function startCounting() {
+            const method = document.getElementById('methodSelect').value;
+            const video = document.getElementById('videoInput').value;
+            const model = document.getElementById('modelSelect').value;
+            
+            currentMethod = method;
+            
+            socket.emit('start_counting', {
+                method: method,
+                video: video,
+                model: model
+            });
+            
+            addLog('info', `🚀 Bắt đầu ${method} counting với ${model}`);
+        }
+
+        function stopCounting() {
+            socket.emit('stop_counting');
+            addLog('warning', '⏹️ Đã dừng hệ thống');
+            
+            disableDrawingMode();
+        }
+
+        function resetSystem() {
+            socket.emit('reset_system');
+            
+            // Reset stats
+            document.getElementById('inCount').textContent = '0';
+            document.getElementById('outCount').textContent = '0';
+            document.getElementById('netCount').textContent = '0';
+            document.getElementById('zoneCount').textContent = '0';
+            
+            // Reset drawing
+            clearDrawing();
+            
+            addLog('info', '🔄 Đã reset hệ thống');
+        }
+
+        function clearLogs() {
+            const logContainer = document.getElementById('logContainer');
+            logContainer.innerHTML = '<div class="log-entry info"><span class="timestamp">[System]</span>📝 Log đã được xóa</div>';
+        }
+
+        function testDrawingMode() {
+            console.log('🧪 Testing drawing mode - START');
+            addLog('info', '🧪 Bắt đầu test drawing mode');
+            
+            // Set test mode flag
+            isTestMode = true;
+            
+            // Re-initialize canvas to ensure it's ready
+            if (!initCanvas()) {
+                addLog('error', '❌ Không thể khởi tạo canvas');
+                return;
+            }
+            
+            // Reset state
+            currentMethod = document.getElementById('methodSelect').value;
+            isDrawingEnabled = true;
+            points = [];
+            
+            // Lấy canvas và setup
+            const videoCanvas = document.getElementById('videoCanvas');
+            const videoFeed = document.getElementById('videoFeed');
+            const noVideo = document.getElementById('noVideo');
+            
+            console.log('🔍 Elements check:', {
+                videoCanvas: !!videoCanvas,
+                videoFeed: !!videoFeed,
+                noVideo: !!noVideo,
+                canvas: !!canvas,
+                ctx: !!ctx
+            });
+            
+            // Ẩn tất cả elements khác
+            videoFeed.style.display = 'none';
+            noVideo.style.display = 'none';
+            
+            // Hiển thị và setup canvas
+            videoCanvas.style.display = 'block';
+            videoCanvas.style.position = 'relative';
+            videoCanvas.style.zIndex = '10';
+            videoCanvas.style.border = '2px solid #00ff00';
+            videoCanvas.style.cursor = 'crosshair';
+            
+            // Set canvas size explicitly
+            videoCanvas.width = 800;
+            videoCanvas.height = 600;
+            
+            // Force layout recalculation
+            videoCanvas.offsetHeight;
+            
+            console.log('📐 Canvas dimensions after setup:', {
+                width: videoCanvas.width,
+                height: videoCanvas.height,
+                clientWidth: videoCanvas.clientWidth,
+                clientHeight: videoCanvas.clientHeight,
+                offsetWidth: videoCanvas.offsetWidth,
+                offsetHeight: videoCanvas.offsetHeight,
+                style: videoCanvas.style.cssText
+            });
+            
+            // Vẽ background test
+            if (ctx) {
+                // Clear canvas first
+                ctx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+                
+                // Draw dark background
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, videoCanvas.width, videoCanvas.height);
+                
+                // Draw grid for easier visualization
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 1;
+                for (let x = 0; x < videoCanvas.width; x += 50) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, videoCanvas.height);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < videoCanvas.height; y += 50) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(videoCanvas.width, y);
+                    ctx.stroke();
+                }
+                
+                // Draw instruction text
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('🧪 TEST CANVAS - CLICK ĐỂ VẼ', videoCanvas.width/2, videoCanvas.height/2 - 20);
+                
+                ctx.font = '18px Arial';
+                ctx.fillStyle = '#00ff00';
+                ctx.fillText(`Mode: ${currentMethod.toUpperCase()}`, videoCanvas.width/2, videoCanvas.height/2 + 20);
+                
+                // Draw border
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(0, 0, videoCanvas.width, videoCanvas.height);
+                
+                console.log('✅ Canvas background, grid và instructions đã vẽ');
+            } else {
+                console.error('❌ Canvas context không khả dụng!');
+                addLog('error', '❌ Canvas context không khả dụng');
+                return;
+            }
+            
+            // Hiển thị drawing instructions
+            videoCanvas.style.display = 'block';
+            videoFeed.style.display = 'none';
+            noVideo.style.display = 'none';
+            
+            // Hiển thị instructions
+            document.getElementById('drawingInstructions').style.display = 'block';
+            updateInstructionText();
+            
+            addLog('info', `🎨 Test drawing mode đã bật cho ${currentMethod}`);
+            addLog('info', '📍 Click trên video để vẽ');
+            
+            // Test click simulation
+            setTimeout(() => {
+                addLog('info', '🧪 Click trên canvas màu đen để test');
+            }, 1000);
+        }
+
+        // Khởi tạo
+        window.addEventListener('load', function() {
+            console.log('Page loaded, initializing...');
+            
+            // Test canvas support
+            const testCanvas = document.createElement('canvas');
+            const testCtx = testCanvas.getContext('2d');
+            console.log('Canvas support:', !!testCtx);
+            
+            initCanvas();
+            updateButtons();
+            updateConnectionStatus(false);
+            loadAvailableModels();
+            
+            // Test drawing initialization
+            setTimeout(() => {
+                console.log('Canvas element:', document.getElementById('videoCanvas'));
+                console.log('Canvas context:', ctx);
+                addLog('info', '🚀 Trang web đã tải xong');
+            }, 1000);
+        });
+
+        // Load available models from server
+        async function loadAvailableModels() {
+            try {
+                const response = await fetch('/api/models');
+                const data = await response.json();
+                updateModelSelect(data.models);
+                updateTensorRTStatus(data.models.tensorrt.length > 0);
+            } catch (error) {
+                console.error('Failed to load models:', error);
+                addLog('warning', '⚠️ Không thể tải danh sách models');
+            }
+        }
+
+        // Update model select with available models
+        function updateModelSelect(models) {
+            const modelSelect = document.getElementById('modelSelect');
+            modelSelect.innerHTML = '';
+            
+            // PyTorch models group
+            if (models.pytorch.length > 0) {
+                const pytorchGroup = document.createElement('optgroup');
+                pytorchGroup.label = 'PyTorch Models';
+                models.pytorch.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = getModelDisplayName(model);
+                    pytorchGroup.appendChild(option);
+                });
+                modelSelect.appendChild(pytorchGroup);
+            }
+            
+            // TensorRT models group
+            if (models.tensorrt.length > 0) {
+                const tensorrtGroup = document.createElement('optgroup');
+                tensorrtGroup.label = 'TensorRT Engines (🚀 Tăng tốc)';
+                models.tensorrt.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = getModelDisplayName(model);
+                    tensorrtGroup.appendChild(option);
+                });
+                modelSelect.appendChild(tensorrtGroup);
+            }
+            
+            // Set default selection
+            if (models.pytorch.includes('yolov8s.pt')) {
+                modelSelect.value = 'yolov8s.pt';
+            } else if (models.pytorch.length > 0) {
+                modelSelect.value = models.pytorch[0];
+            }
+        }
+
+        // Get display name for model
+        function getModelDisplayName(model) {
+            const displayNames = {
+                'yolov8n.pt': 'YOLOv8n (nhanh)',
+                'yolov8s.pt': 'YOLOv8s (cân bằng)',
+                'yolov8m.pt': 'YOLOv8m (chính xác)',
+                'yolov8l.pt': 'YOLOv8l (rất chính xác)',
+                'yolov9s.pt': 'YOLOv9s',
+                'yolov8n_fp16.engine': 'YOLOv8n TensorRT FP16',
+                'yolov8s_fp16.engine': 'YOLOv8s TensorRT FP16',
+                'yolov8m_fp16.engine': 'YOLOv8m TensorRT FP16',
+                'yolov8l_fp16.engine': 'YOLOv8l TensorRT FP16',
+                'yolov9s_fp16.engine': 'YOLOv9s TensorRT FP16',
+                'yolov8n_int8.engine': 'YOLOv8n TensorRT INT8',
+                'yolov8s_int8.engine': 'YOLOv8s TensorRT INT8',
+                'yolov8m_int8.engine': 'YOLOv8m TensorRT INT8',
+                'yolov8l_int8.engine': 'YOLOv8l TensorRT INT8',
+                'yolov9s_int8.engine': 'YOLOv9s TensorRT INT8'
+            };
+            return displayNames[model] || model;
+        }
+
+        // Update TensorRT status indicator
+        function updateTensorRTStatus(available) {
+            // Add status indicator near model select
+            const modelGroup = document.querySelector('.control-group:has(#modelSelect)');
+            if (modelGroup) {
+                let statusIndicator = modelGroup.querySelector('.tensorrt-status');
+                if (!statusIndicator) {
+                    statusIndicator = document.createElement('div');
+                    statusIndicator.className = 'tensorrt-status';
+                    statusIndicator.style.cssText = 'font-size: 12px; margin-top: 5px; padding: 3px 6px; border-radius: 3px;';
+                    modelGroup.appendChild(statusIndicator);
+                }
+                
+                if (available) {
+                    statusIndicator.innerHTML = '🚀 TensorRT Available';
+                    statusIndicator.style.backgroundColor = '#4CAF50';
+                    statusIndicator.style.color = 'white';
+                } else {
+                    statusIndicator.innerHTML = '⚠️ TensorRT Not Available';
+                    statusIndicator.style.backgroundColor = '#FF9800';
+                    statusIndicator.style.color = 'white';
+                }
+            }
+        }
+
+        // Quantize current selected model
+        async function quantizeCurrentModel() {
+            const modelSelect = document.getElementById('modelSelect');
+            const precisionSelect = document.getElementById('precisionSelect');
+            const quantizeBtn = document.getElementById('quantizeBtn');
+            
+            const selectedModel = modelSelect.value;
+            const selectedPrecision = precisionSelect.value;
+            
+            // Only quantize PyTorch models
+            if (!selectedModel.endsWith('.pt')) {
+                addLog('warning', '⚠️ Chỉ có thể quantize PyTorch models (.pt)');
+                return;
+            }
+            
+            // Disable button and show progress
+            quantizeBtn.disabled = true;
+            quantizeBtn.innerHTML = '⏳ Đang tạo...';
+            
+            try {
+                const response = await fetch(`/api/quantize/${selectedModel}/${selectedPrecision}`);
+                const data = await response.json();
+                
+                if (data.status === 'started') {
+                    addLog('info', data.message);
+                    addLog('info', '⏱️ Quá trình này có thể mất vài phút...');
+                } else {
+                    addLog('error', '❌ Không thể bắt đầu quantization');
+                }
+            } catch (error) {
+                addLog('error', `❌ Lỗi quantization: ${error.message}`);
+            } finally {
+                // Re-enable button after 5 seconds
+                setTimeout(() => {
+                    quantizeBtn.disabled = false;
+                    quantizeBtn.innerHTML = '⚡ Tạo Engine';
+                }, 5000);
+            }
+        }
+
+        // Listen for quantization completion
+        socket.on('quantization_complete', function(data) {
+            if (data.success) {
+                addLog('success', data.message);
+                // Reload models to show new engine
+                loadAvailableModels();
+            } else {
+                addLog('error', `❌ Quantization failed: ${data.error}`);
+            }
+            
+            // Re-enable quantize button
+            const quantizeBtn = document.getElementById('quantizeBtn');
+            quantizeBtn.disabled = false;
+            quantizeBtn.innerHTML = '⚡ Tạo Engine';
+        });
+    </script>
+</body>
+</html>

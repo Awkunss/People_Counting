@@ -1,100 +1,115 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-People Counting System - Main Dispatcher
-Hệ thống đếm người với hai phương pháp: Line và Zone
+People Counting System - Main Entry Point
+Hệ thống đếm người với AI và web interface
 """
 
-import argparse
 import sys
+import os
+import argparse
 
-# Import các module counting
-try:
-    from line_counting import line_counter
-    from zone_counting import zone_counter
-except ImportError as e:
-    print(f"❌ Lỗi import: {e}")
-    sys.exit(1)
+# Add app directory to path
+current_dir = os.path.dirname(__file__)
+app_dir = os.path.join(current_dir, 'app')
+sys.path.insert(0, app_dir)
 
-class PeopleCountingDispatcher:
-    """Lớp điều phối đơn giản cho hệ thống đếm người"""
-    
-    def __init__(self):
-        self.methods = ['line', 'zone']
-    
-    def show_methods_info(self):
-        """Hiển thị thông tin về các phương pháp counting"""
-        print("\n" + "="*50)
-        print("🔍 PEOPLE COUNTING SYSTEM")
-        print("="*50)
-        print("📊 LINE: Đếm người qua đường thẳng")
-        print("🏢 ZONE: Đếm người trong vùng khu vực")
-        print("\n💡 Usage:")
-        print("  python main.py --method line --video Test.mp4")
-        print("  python main.py --method zone --video 0")
-        print("="*50)
-    
-    def dispatch(self, method: str, video_path: str, model_path: str) -> None:
-        """Điều phối chạy phương pháp counting"""
-        print(f"\n🚀 Starting {method.upper()} counting...")
+def show_methods():
+    """Hiển thị các phương pháp có sẵn"""
+    print("=" * 50)
+    print("🔍 PEOPLE COUNTING SYSTEM")
+    print("=" * 50)
+    print("📊 LINE: Đếm người qua đường thẳng")
+    print("🏢 ZONE: Đếm người trong vùng khu vực")
+    print("🌐 WEB:  Giao diện web realtime")
+    print("⚡ TensorRT: GPU acceleration support")
+    print()
+    print("💡 Usage:")
+    print("  python main.py --method line --video data/Test.mp4")
+    print("  python main.py --method zone --video 0")
+    print("  python main.py --method web")
+    print()
+    print("🚀 TensorRT Models:")
+    print("  --model yolov9s.engine     # TensorRT FP16")
+    print("  --model yolov8s_int8.engine # TensorRT INT8")
+    print()
+    print("🔧 Tools:")
+    print("  python scripts/quantize_models.py --help")
+    print("  python scripts/setup_tensorrt.py")
+    print("=" * 50)
+
+def run_line_counting(video, model):
+    """Chạy line counting"""
+    try:
+        from core.line_counting import line_counter
+        print("🎯 Starting LINE counting...")
+        line_counter(video, model)
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def run_zone_counting(video, model):
+    """Chạy zone counting"""
+    try:
+        from core.zone_counting import zone_counter
+        print("🏢 Starting ZONE counting...")
+        zone_counter(video, model)
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+def run_web_server():
+    """Chạy web server"""
+    try:
+        from web.server import app, socketio
+        from config.settings import WEB_HOST, WEB_PORT, WEB_DEBUG
         
-        # Chuyển đổi camera ID nếu cần
-        if video_path.isdigit():
-            video_path = int(video_path)
+        print("🌐 Starting Web Server...")
+        print("🚀 Launching web server...")
+        print(f"🌍 URL: http://localhost:{WEB_PORT}")
+        print(f"📱 Mobile: http://<your-ip>:{WEB_PORT}")
+        print("⚠️  Nhấn Ctrl+C để dừng server")
         
-        # Chạy phương pháp tương ứng
-        if method == 'line':
-            line_counter(video_path=video_path, model=model_path)
-        elif method == 'zone':
-            zone_counter(video_path=video_path, model=model_path)
-        else:
-            print(f"❌ Unknown method: {method}")
-            print(f"✅ Available: {self.methods}")
-
-def create_argument_parser() -> argparse.ArgumentParser:
-    """Tạo argument parser đơn giản"""
-    parser = argparse.ArgumentParser(description="🔍 People Counting System")
-    
-    parser.add_argument('--method', '-m', 
-                       choices=['line', 'zone'], 
-                       default='line',
-                       help='Phương pháp: line hoặc zone')
-    
-    parser.add_argument('--video', '-v', 
-                       type=str, 
-                       default='Test.mp4',
-                       help='Video file hoặc camera ID (0, 1, 2...)')
-    
-    parser.add_argument('--model', 
-                       type=str, 
-                       default='yolov8s.pt',
-                       help='YOLO model file')
-    
-    parser.add_argument('--show-methods', 
-                       action='store_true',
-                       help='Hiển thị thông tin methods')
-    
-    return parser
+        # Start Flask-SocketIO server
+        socketio.run(
+            app, 
+            host=WEB_HOST, 
+            port=WEB_PORT, 
+            debug=WEB_DEBUG,
+            allow_unsafe_werkzeug=True
+        )
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        print("📝 Hãy cài đặt: pip install flask flask-socketio")
+    except Exception as e:
+        print(f"❌ Error: {e}")
 
 def main():
-    """Hàm main đơn giản"""
-    parser = create_argument_parser()
+    """Main function"""
+    parser = argparse.ArgumentParser(description='People Counting System')
+    parser.add_argument('--method', choices=['line', 'zone', 'web'], 
+                       help='Counting method')
+    parser.add_argument('--video', default='Test.mp4',
+                       help='Video source (file path or camera ID)')
+    parser.add_argument('--model', default='yolov8s.pt',
+                       help='YOLO model to use')
+    parser.add_argument('--show-methods', action='store_true',
+                       help='Show available methods')
+    
     args = parser.parse_args()
     
-    dispatcher = PeopleCountingDispatcher()
-    
-    # Hiển thị methods info nếu được yêu cầu
-    if args.show_methods:
-        dispatcher.show_methods_info()
+    if args.show_methods or not args.method:
+        show_methods()
         return
     
-    # Chạy dispatcher
-    try:
-        dispatcher.dispatch(args.method, args.video, args.model)
-    except KeyboardInterrupt:
-        print("\n⚠️  Dừng bởi người dùng")
-    except Exception as e:
-        print(f"\n❌ Lỗi: {e}")
+    if args.method == 'line':
+        run_line_counting(args.video, args.model)
+    elif args.method == 'zone':
+        run_zone_counting(args.video, args.model)
+    elif args.method == 'web':
+        run_web_server()
 
 if __name__ == "__main__":
     main()
